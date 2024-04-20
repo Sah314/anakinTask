@@ -3,6 +3,7 @@ import {login, signup} from "../controllers/userController";
 import {addTrain, checkHealth} from "../controllers/adminController";
 import {bookTicket, getBookingDetails, getSeatAvailability} from "../controllers/trainController";
 import checkAdmin from "../middlewares/checkAdmin";
+import { authentication } from "../middlewares/authentication";
 export const router = Router();
 
 const userRouter = Router();
@@ -10,9 +11,9 @@ const userRouter = Router();
 userRouter.post('/login', login);
 userRouter.post('/signup', signup);
 //For user operations
-userRouter.post('/getTrains', getSeatAvailability);
-userRouter.post('/getTicket',getBookingDetails);
-userRouter.post('/bookTickets', bookTicket);
+userRouter.post('/getTrains', authentication ,getSeatAvailability);
+userRouter.post('/getTicket',authentication,getBookingDetails);
+userRouter.post('/bookTickets',authentication, bookTicket);
 
 const adminRouter = Router();
 adminRouter.post('/addTrain', addTrain);

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Train, TrainSchedule, availableSeats } from '../models/trains';
 import { v4 as uuidv4 } from 'uuid';
 import { Ticket } from '../models/users';
+import { P } from 'pino';
 
 
 export const getSeatAvailability = async (req: Request, res: Response) => {
@@ -48,18 +49,33 @@ export const bookTicket = async (req: Request, res: Response) => {
         }
 
         // Update the seats
-        let availseats = await availableSeats.findAll({ where: { trainNo: trainNumber, inBookingState: false, isBooked: false } });
+    const lastBooking = await availableSeats.findOne({where: {trainNo: trainNumber,date:date, isBooked: true},order: [['seatNo', 'ASC']],limit:seats});
 
-       await Promise.all(availseats.slice(0, seats).map(seat => seat.update({ inBookingState: true })));
-       
-       //Payment gateway integration
-       //...
-       //...
-       //Setting the isBooked field to true
-       await Promise.all(availseats.slice(0, seats).map(seat => seat.update({ inBooked: true })));
-       const currTicket = await Ticket.create({ trainNo: trainNumber, date: date, source: train.getDataValue('source'), destination: train.getDataValue('destination'), seats: seats, ticketId: uuidv4(),userId:userId});
+    const availableSeatsCount = await availableSeats.count({where: {trainNo: trainNumber,date:date,inBookingState:false ,isBooked: false}});
 
-       trainSchedule.update({seats: trainSchedule.getDataValue('seats') - seats});
+    let lastBookingId=-1;
+     if (lastBooking) {
+    lastBookingId = lastBooking.getDataValue('seatNo');
+     }
+    let balanceSeats = 0;
+    if (seats > availableSeatsCount && lastBookingId < trainSchedule.getDataValue('seats')) {
+        balanceSeats = seats - availableSeatsCount;
+        for (let i = 1; i <= balanceSeats; i++) {
+            await availableSeats.create({ trainNo: trainNumber, seatNo: lastBookingId + i, inBookingState: false, isBooked: true });
+        }
+    } else {
+        for (let i = 1; i <= seats; i++) {
+            await availableSeats.update({ inBookingState: false, isBooked: true }, { where: { trainNo: trainNumber, seatNo: lastBookingId + i } });
+        }
+    }
+    //Payment gateway integration
+    //...
+    //...
+    //Setting the isBooked field to true
+
+    const currTicket = await Ticket.create({ trainNo: trainNumber, date: date, source: train.getDataValue('source'), destination: train.getDataValue('destination'), seats: seats, ticketId: uuidv4(),userId:userId});
+
+    trainSchedule.update({seats: trainSchedule.getDataValue('seats') - seats});
     // Send the response
     res.status(200).send({message:'Successfully booked the ticket',data:currTicket});
     } catch (error) {
@@ -68,18 +84,21 @@ export const bookTicket = async (req: Request, res: Response) => {
 }
 
 export const getBookingDetails = async (req: Request, res: Response) => {
-    
-    try {const {ticketId} = req.body;
+    let status = 501;
+    try {
+        const {ticketId} = req.body;
     if(!ticketId){
-        res.status(404).send('Please provide ticket id');
+        status = 404;
+        throw new Error('Please provide ticket id');
     }
     const ticket = await Ticket.findOne({where: {ticketId: ticketId}});
     if(!ticket){
-        res.status(404).send('Ticket not found');
+        status = 404;
+        throw new Error('Ticket not found');
     }
     res.status(200).send({message:'Success',data:ticket});
     }
     catch (error) {
-        res.status(500).send('Internal Server Error');
+        res.status(status).send({message:'Internal Server Error',error:error});
     }
 }

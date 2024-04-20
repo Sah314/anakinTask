@@ -13,30 +13,20 @@ if(!jwtsecret){
     process.exit(1);
 }
 
-type userInfo = {
-    email: string;
-    password: string;
-}
-type userResponse ={
-    message: string;
-    data: userInfo;
 
-}
 export const login = async (req: Request, res: Response) => {
 
     try {
-        const { email, password } = req.body as userInfo;
+        const { email, password} = req.body;
         logger.info('Login request received');
         const currUser = await Users.findOne({where: {email: email}});
         if(!currUser){
-            res.status(400).send('User doesn\'t exist');
-            return;
+            return res.status(400).send('User doesn\'t exist');
         }
         const isMatch = bcrypt.compareSync(password, currUser.getDataValue('password'));
 
         if(!isMatch){
-            res.status(400).send('Invalid credentials');
-            return;
+            return res.status(400).send('Invalid credentials');
         }
 
         let token;
@@ -44,18 +34,18 @@ export const login = async (req: Request, res: Response) => {
             email: email,
             userId: currUser.getDataValue('id')
         }, jwtsecret as Secret, {expiresIn: '1h'})
-        res.status(200).send({message: 'Login successful', data: {email: email,token:token}});
+        return res.status(200).send({message: 'Login successful', data: {email: email,token:token}});
         // Rest of the code...
     } catch (error) {
         // Handle error...
-        res.status(500).send({message:'Internal Server Error', error:error});
+        return res.status(500).send({message:'Internal Server Error', error:error});
     }
 }
 
 export const signup = async (req: Request, res: Response) => {
     logger.info('Signup request received');
     try {
-        const { email, password } = req.body as userInfo;
+        const { email, password,role } = req.body ;
         //Todo: Check if user already exists
         if(await Users.findOne({where: {email: email}})){
             res.status(400).send('User already exists');
@@ -64,7 +54,7 @@ export const signup = async (req: Request, res: Response) => {
         const salt = bcrypt.genSaltSync(10);
         const encryptedpassword = bcrypt.hashSync(password, salt);
         //Todo: Add user to database
-        const newUser = await Users.create({email: email, password: encryptedpassword});        
+        const newUser = await Users.create({email: email, password: encryptedpassword,role:role});        
         await newUser.save();
         logger.info(newUser,'newUser: ');
 
